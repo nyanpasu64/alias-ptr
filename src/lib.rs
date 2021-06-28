@@ -1,10 +1,25 @@
 use std::ops::Deref;
 use std::ptr::NonNull;
 
-/// The equivalent of C++'s `T*` or `T const*`, with shared ownership over T.
-/// You are responsible for deleting exactly one, and not using it or its aliases after.
-/// Only necessary until http://blog.pnkfx.org/blog/2021/03/25/how-to-dismantle-an-atomic-bomb/ is fixed,
-/// at which point we can use &UnsafeCell<T> instead.
+/// A shared ownership type pointing to heap memory manually freed.
+///
+/// In Rust terms, `AliasPtr<T>` acts like a `T&` that allows dangling and deletion,
+/// a `Rc<T>` or `Arc<T>` with manual deletion,
+/// or like a more convenient raw pointer which is assumed to be valid.
+///
+/// In C++ terms, `AliasPtr<T>` operates like `T*` or `T const*`, with shared ownership over `T`,
+/// where the programmer decides which one to `delete`.
+///
+/// You are responsible for calling `delete()` on exactly one `AliasPtr`,
+/// and not dereferencing it or its aliases after.
+///
+/// ## Implementation
+///
+/// `AliasPtr` wraps a raw pointer rather than a `&`,
+/// because it's not legal to pass a `&` into `Box::from_raw()`,
+/// and a dangling `&` may be UB.
+/// See ["How to Dismantle an Atomic Bomb"](http://blog.pnkfx.org/blog/2021/03/25/how-to-dismantle-an-atomic-bomb/)
+/// for details.
 #[repr(transparent)]
 pub struct AliasPtr<T: ?Sized>(NonNull<T>);
 // PhantomData is not necessary to prevent leaking Box<&'stack U> variables.
@@ -16,6 +31,11 @@ impl<T: ?Sized> Clone for AliasPtr<T> {
     }
 }
 
+// TODO add support for custom allocators?
+// Perhaps holding an allocator reference is inappropriate for a raw pointer workalike,
+// so add a PhantomData(A) and accept an A in a "delete_alloc" function?
+// Not sure.
+
 impl<T: ?Sized> From<Box<T>> for AliasPtr<T> {
     fn from(item: Box<T>) -> Self {
         // Safety: pointer is obtained from Box::into_raw().
@@ -24,36 +44,53 @@ impl<T: ?Sized> From<Box<T>> for AliasPtr<T> {
 }
 
 impl<T: Sized> AliasPtr<T> {
+    /// Allocates memory on the heap and then places `x` into it.
+    ///
+    /// This doesn't actually allocate if `T` is zero-sized.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let five = AliasPtr::new(5);
+    /// ```
     pub fn new(x: T) -> AliasPtr<T> {
         AliasPtr::from(Box::new(x))
     }
 }
 
 impl<T: ?Sized> AliasPtr<T> {
-    /// Requirements: p must be valid (its target is readable and writable).
-    /// In order for calling delete() to be sound,
-    /// p must be obtained from Box::into_raw().
+    /// Constructs an `AliasPtr` from a raw pointer.
     ///
-    /// Panics: If `p` is null.
+    /// # Requirements
+    ///
+    /// `p` must be non-null and valid (its target is readable and writable).
+    ///
+    /// In order for calling `delete()` to be sound,
+    /// `p` must be obtained from `Box::into_raw()`.
     pub unsafe fn from_raw(p: *mut T) -> Self {
-        Self(NonNull::new(p).unwrap())
+        Self(NonNull::new_unchecked(p))
     }
 
     // TODO should some of these functions be turned into type-level functions
     // to avoid clashing with Deref?
 
+    /// Copy the pointer. (This type doesn't implement `Copy` to ensure all copies are explicit.)
     pub fn copy(&self) -> Self {
         self.clone()
     }
 
-    /// Requirements: The AliasPtr must be derived from Box::into_raw(),
-    /// and neither self nor aliasing pointers can be safely dereferenced
-    /// (a safe but unsound operation) after calling delete().
+    /// Call the destructor of `T` and free the allocated memory.
     ///
-    /// This method *really* should take `self` by move,
-    /// but unfortunately doing so would prevent it from being called in Drop.
-    /// See https://internals.rust-lang.org/t/re-use-struct-fields-on-drop-was-drop-mut-self-vs-drop-self/8594
-    /// and https://github.com/rust-lang/rust/issues/4330#issuecomment-26852226.
+    /// # Requirements
+    ///
+    /// The `AliasPtr` must be derived from `Box::into_raw()` (from the global allocator).
+    /// After calling `delete()`, neither self nor aliasing pointers
+    /// can be safely dereferenced (a safe but unsound operation).
+    ///
+    /// This method should logically take `self` by move,
+    /// but that would unfortunately prevent `drop(&mut Parent)` from calling `delete(self)`.
+    /// `Drop` only provides `&mut Parent`, which doesn't allow moving fields out.
+    /// For discussion, see ["Re-use struct fields on drop"](https://internals.rust-lang.org/t/re-use-struct-fields-on-drop-was-drop-mut-self-vs-drop-self/8594).
     pub unsafe fn delete(&mut self) {
         Box::from_raw(self.0.as_ptr());
     }
