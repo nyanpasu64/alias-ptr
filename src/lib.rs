@@ -37,6 +37,9 @@ impl<T: ?Sized> Ptr<T> {
         Self(p as *const T)
     }
 
+    // TODO should some of these functions be turned into type-level functions
+    // to avoid clashing with Deref?
+
     pub fn copy(&self) -> Self {
         self.clone()
     }
@@ -51,6 +54,13 @@ impl<T: ?Sized> Ptr<T> {
     /// and https://github.com/rust-lang/rust/issues/4330#issuecomment-26852226.
     pub unsafe fn delete(&mut self) {
         Box::from_raw(self.0 as *mut T);
+    }
+
+    /// Provides a raw pointer to the data.
+    ///
+    /// The pointer is valid until delete() is called on the `this` or any of its aliases.
+    pub fn as_ptr(this: &Self) -> *const T {
+        this.0
     }
 }
 
