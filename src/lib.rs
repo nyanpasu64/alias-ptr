@@ -1,14 +1,14 @@
 use std::ops::Deref;
+use std::ptr::NonNull;
 
 /// The equivalent of C++'s `T*` or `T const*`, with shared ownership over T.
 /// You are responsible for deleting exactly one, and not using it or its aliases after.
 /// Only necessary until http://blog.pnkfx.org/blog/2021/03/25/how-to-dismantle-an-atomic-bomb/ is fixed,
 /// at which point we can use &UnsafeCell<T> instead.
 #[repr(transparent)]
-pub struct Ptr<T: ?Sized>(*const T);
+pub struct Ptr<T: ?Sized>(NonNull<T>);
 // PhantomData is not necessary to prevent leaking Box<&'stack U> variables.
 // Also read https://docs.rs/crate/ptr/0.2.2/source/src/lib.rs for reference.
-// TODO switch to NonNull for null pointer optimization.
 
 impl<T: ?Sized> Clone for Ptr<T> {
     fn clone(&self) -> Self {
@@ -33,8 +33,10 @@ impl<T: ?Sized> Ptr<T> {
     /// Requirements: p must be valid (its target is readable and writable).
     /// In order for calling delete() to be sound,
     /// p must be obtained from Box::into_raw().
+    ///
+    /// Panics: If `p` is null.
     pub unsafe fn from_raw(p: *mut T) -> Self {
-        Self(p as *const T)
+        Self(NonNull::new(p).unwrap())
     }
 
     // TODO should some of these functions be turned into type-level functions
@@ -53,14 +55,14 @@ impl<T: ?Sized> Ptr<T> {
     /// See https://internals.rust-lang.org/t/re-use-struct-fields-on-drop-was-drop-mut-self-vs-drop-self/8594
     /// and https://github.com/rust-lang/rust/issues/4330#issuecomment-26852226.
     pub unsafe fn delete(&mut self) {
-        Box::from_raw(self.0 as *mut T);
+        Box::from_raw(self.0.as_ptr());
     }
 
     /// Provides a raw pointer to the data.
     ///
     /// The pointer is valid until delete() is called on the `this` or any of its aliases.
     pub fn as_ptr(this: &Self) -> *const T {
-        this.0
+        this.0.as_ptr()
     }
 }
 
@@ -71,7 +73,7 @@ impl<T: ?Sized> Deref for Ptr<T> {
         // so can be dereferenced safely.
         // It is the responsibility of the user to never delete() a Ptr
         // then dereference it or its aliases afterwards.
-        unsafe { &*self.0 }
+        unsafe { &*self.0.as_ptr() }
     }
 }
 
@@ -81,6 +83,7 @@ impl<T: ?Sized> Deref for Ptr<T> {
 mod tests {
     use super::*;
     use std::cell::Cell;
+    use std::mem::size_of;
 
     struct AliasedPair(Ptr<Cell<i32>>, Ptr<Cell<i32>>);
 
@@ -97,6 +100,12 @@ mod tests {
                 self.0.delete();
             }
         }
+    }
+
+    #[test]
+    fn test_option_size_of() {
+        assert_eq!(size_of::<usize>(), size_of::<Ptr<i32>>());
+        assert_eq!(size_of::<usize>(), size_of::<Option<Ptr<i32>>>());
     }
 
     #[test]
