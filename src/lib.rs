@@ -33,6 +33,20 @@ use std::ptr::NonNull;
 /// In C++ terms, `AliasPtr<T>` operates like `T*` or `T const*`, with shared ownership over `T`,
 /// where the programmer decides which one to `delete`.
 ///
+/// ## Thread Safety
+///
+/// Since `AliasPtr<T>` only exposes the same set of safe operations as a `&T`
+/// (`delete()` is unsafe),
+/// it would technically be sound to expose the same `Send`/`Sync` bounds as `&T`:
+/// `impl Send/Sync for AliasPtr<T> where T: Sync`.
+///
+/// However, I added additional `T: Send` bounds for both `impl Send`/`Sync` (matching `Arc`),
+/// as a lint to guard against sending or cloning an `AliasPtr<T>` to another thread,
+/// then calling `delete()` there.
+///
+/// If these bounds are inappropriate for your data structure, you can `unsafe impl Send/Sync for`
+/// your type containing `AliasPtr`.
+///
 /// ## Implementation
 ///
 /// `AliasPtr<T>` has the same size as `&T`, and is interconvertible with a `Box<T>`.
@@ -139,7 +153,8 @@ impl<T: ?Sized> Deref for AliasPtr<T> {
     }
 }
 
-// TODO Send/Sync
+unsafe impl<T: ?Sized> Send for AliasPtr<T> where T: Send + Sync {}
+unsafe impl<T: ?Sized> Sync for AliasPtr<T> where T: Send + Sync {}
 
 #[cfg(test)]
 mod tests {
