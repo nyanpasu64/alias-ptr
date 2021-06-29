@@ -18,7 +18,7 @@ Docs will be located at https://docs.rs/alias-ptr.
 
 ## Usage
 
-```rs
+```rust
 use alias_ptr::AliasPtr;
 use std::cell::Cell;
 
