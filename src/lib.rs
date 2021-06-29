@@ -1,3 +1,7 @@
+//! The `alias-ptr` crate supplies the [`AliasPtr`] type,
+//! which allows safely creating multiple pointers to the same heap-allocated memory,
+//! and (unsafely) freeing the memory without reference counting overhead.
+
 use std::ops::Deref;
 use std::ptr::NonNull;
 
