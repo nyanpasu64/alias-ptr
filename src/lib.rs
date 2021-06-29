@@ -94,6 +94,8 @@ impl<T: Sized> AliasPtr<T> {
     /// ```
     /// # use alias_ptr::AliasPtr;
     /// let five = AliasPtr::new(5);
+    /// # let mut five = five;
+    /// # unsafe { five.delete(); }
     /// ```
     pub fn new(x: T) -> AliasPtr<T> {
         AliasPtr::from(Box::new(x))
