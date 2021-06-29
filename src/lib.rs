@@ -99,7 +99,7 @@ impl<T: Sized> AliasPtr<T> {
 impl<T: ?Sized> AliasPtr<T> {
     /// Constructs an `AliasPtr` from a raw pointer.
     ///
-    /// # Requirements
+    /// # Safety
     ///
     /// `p` must be non-null and valid (its target is readable and writable).
     ///
@@ -121,7 +121,7 @@ impl<T: ?Sized> AliasPtr<T> {
 
     /// Call the destructor of `T` and free the allocated memory.
     ///
-    /// # Requirements
+    /// # Safety
     ///
     /// The `AliasPtr` must be derived from `Box::into_raw()` (from the global allocator).
     /// After calling `delete()`, neither self nor aliasing pointers
