@@ -62,3 +62,7 @@ cargo +nightly miri test --target-dir miri
 ```
 
 Note that this clobbers the "miri" subdirectory.
+
+## Credits
+
+Thanks to those in the Rust community Discord server's #black-magic channel for discussing the various forms of UB I had to avoid while writing this crate.
