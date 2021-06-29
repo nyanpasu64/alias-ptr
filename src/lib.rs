@@ -1,21 +1,43 @@
 use std::ops::Deref;
 use std::ptr::NonNull;
 
-/// A shared ownership type pointing to heap memory manually freed.
+/// An untracked shared ownership pointer, pointing to heap memory manually freed.
 ///
-/// In Rust terms, `AliasPtr<T>` acts like a `T&` that allows dangling and deletion,
+/// The type `AliasPtr<T>` provides shared ownership of a value of type `T`,
+/// allocated in the heap. Invoking [`copy`][AliasPtr::copy] on `AliasPtr` produces
+/// a new `AliasPtr` instance, which points to the same allocation on the heap as the
+/// source `AliasPtr`. When you call `delete` on any of the copies,
+/// the value stored in that allocation is dropped,
+/// and all of the copies can no longer be safely dereferenced.
+///
+/// `AliasPtr` is primarily intended as an unsafe building block for safe abstractions,
+/// in order to avoid the runtime overhead of `Rc` or `Arc`
+/// in cases where the lifetimes are known statically.
+///
+/// Shared references in Rust disallow mutation by default, and [`AliasPtr`]
+/// is no exception: you cannot generally obtain a mutable reference to
+/// something inside an [`AliasPtr`]. If you need mutability, put a `Cell`/`RefCell`
+/// (not thread-safe), `Mutex`/`RwLock`/`Atomic` (thread-safe), or `UnsafeCell` (unsafe)
+/// inside the `AliasPtr`.
+///
+/// ## Usage
+///
+/// For each `T` on the heap, you are responsible for calling `delete()`
+/// on exactly one `AliasPtr` pointing to it,
+/// and not dereferencing it or its aliases after.
+///
+/// In Rust terms, `AliasPtr<T>` acts like a `&T` that allows dangling and deletion,
 /// a `Rc<T>` or `Arc<T>` with manual deletion,
 /// or like a more convenient raw pointer which is assumed to be valid.
 ///
 /// In C++ terms, `AliasPtr<T>` operates like `T*` or `T const*`, with shared ownership over `T`,
 /// where the programmer decides which one to `delete`.
 ///
-/// You are responsible for calling `delete()` on exactly one `AliasPtr`,
-/// and not dereferencing it or its aliases after.
-///
 /// ## Implementation
 ///
-/// `AliasPtr` wraps a raw pointer rather than a `&`,
+/// `AliasPtr<T>` has the same size as `&T`, and is interconvertible with a `Box<T>`.
+///
+/// `AliasPtr` wraps a raw pointer rather than a `&T`,
 /// because it's not legal to pass a `&` into `Box::from_raw()`,
 /// and a dangling `&` may be UB.
 /// See ["How to Dismantle an Atomic Bomb"](http://blog.pnkfx.org/blog/2021/03/25/how-to-dismantle-an-atomic-bomb/)
@@ -26,6 +48,7 @@ pub struct AliasPtr<T: ?Sized>(NonNull<T>);
 // Also read https://docs.rs/crate/ptr/0.2.2/source/src/lib.rs for reference.
 
 impl<T: ?Sized> Clone for AliasPtr<T> {
+    /// Copy the pointer without copying the underlying data.
     fn clone(&self) -> Self {
         Self(self.0)
     }
@@ -74,7 +97,9 @@ impl<T: ?Sized> AliasPtr<T> {
     // TODO should some of these functions be turned into type-level functions
     // to avoid clashing with Deref?
 
-    /// Copy the pointer. (This type doesn't implement `Copy` to ensure all copies are explicit.)
+    /// Copy the pointer without copying the underlying data.
+    /// (This is equivalent to calling `clone()`.
+    /// This type doesn't implement `Copy` to ensure all copies are explicit.)
     pub fn copy(&self) -> Self {
         self.clone()
     }
