@@ -88,6 +88,7 @@ impl<T: Sized> AliasPtr<T> {
     /// # Examples
     ///
     /// ```
+    /// # use alias_ptr::AliasPtr;
     /// let five = AliasPtr::new(5);
     /// ```
     pub fn new(x: T) -> AliasPtr<T> {
