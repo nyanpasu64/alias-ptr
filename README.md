@@ -14,6 +14,8 @@ Interestingly, `owning-ref`'s `VecRef` type is not unsound because `Vec` is curr
 
 `alias-ptr` is planned to be published at https://lib.rs/alias-ptr.
 
+Docs will be located at https://docs.rs/alias-ptr.
+
 ## Usage
 
 ```rs
