@@ -7,19 +7,20 @@ use crate::AliasPtr;
 /// references.
 ///
 /// The type `AliasBox<T>` provides unique ownership and shared access to a value of
-/// type `T`, allocated in the heap. Invoking [`alias`][AliasBox::alias] on `AliasBox`
-/// produces an `AliasPtr<T>` instance, which points to the same allocation on the heap
-/// as the source `AliasBox`. It is unsound to call `delete()` on the
-/// resulting `AliasPtr`. When you drop the `AliasBox`, the target is dropped and
+/// type `T`, allocated in the heap. Invoking [`alias`][AliasBox::alias] on
+/// `AliasBox<T>` produces an [`AliasPtr<T>`] instance, which points to the same
+/// allocation on the heap as the source `AliasBox`.
+/// It is unsound to call [`delete()`][AliasPtr::delete] on the resulting `AliasPtr`.
+/// When you drop the `AliasBox`, the target is dropped and
 /// deallocated, and all of the aliases can no longer be safely dereferenced.
 ///
 /// `AliasBox` is primarily intended as an unsafe building block for safe abstractions,
 /// in order to avoid the runtime overhead of `Rc` or `Arc`
 /// in cases where the lifetimes are known statically.
 ///
-/// Shared references in Rust disallow mutation by default, and [`AliasBox`]
+/// Shared references in Rust disallow mutation by default, and `AliasBox`
 /// is no exception: you cannot generally obtain a mutable reference to
-/// something inside an [`AliasBox`]. If you need mutability, put a `Cell`/`RefCell`
+/// something inside an `AliasBox`. If you need mutability, put a `Cell`/`RefCell`
 /// (not thread-safe), `Mutex`/`RwLock`/`Atomic` (thread-safe), or `UnsafeCell`
 /// (unsafe API) inside the `AliasBox`.
 ///
@@ -28,28 +29,30 @@ use crate::AliasPtr;
 /// For each `AliasBox<T>`, you are responsible for not deleting its `AliasPtr` aliases,
 /// or dereferencing them after destroying the `AliasBox`.
 ///
-/// In Rust terms, `AliasBox<T>` acts like a `Box<T>` but without the noalias
-/// property.
+/// In Rust terms, `AliasBox<T>` frees the target like a `Box<T>`, but dereferences
+/// like a `&T` (is not noalias and does not provide exclusive access).
 ///
-/// In C++ terms, `AliasUnknown<T>` operates like `unique_ptr<T>`.
+/// In C++ terms, `AliasBox<T>` operates like `unique_ptr<T>`, which can be freely
+/// aliased by other pointers.
 ///
 /// ## Thread Safety
 ///
-/// `AliasBox<T>: Sync` requires `T: Sync` because it allows you to call `deref()` or
-/// `alias()` on another thread. It doesn't require `T: Send` because,
+/// `AliasBox<T>: Sync` requires `T: Sync`, because `AliasBox<T>: Sync` allows you to
+/// call [`AliasBox::deref()`] or
+/// [`AliasBox::alias()`] on another thread. It doesn't require `T: Send` because,
 /// although `AliasBox<T>: Sync` lets you call `AliasBox::alias()` on another thread
-/// and get an `AliasPtr<T>`, `AliasPtr::delete()` is marked unsafe,
+/// and get an [`AliasPtr<T>`], [`AliasPtr::delete()`] is marked unsafe,
 /// and deleting an `AliasBox`-derived `AliasPtr` is unsound to perform on *any* thread.
 ///
-/// `AliasBox<T>: Send` requires `T: Send` because it allows you to drop `T` on the
-/// other thread, requiring `T: Send`. And it requires `T: Sync` as a lint, because
+/// `AliasBox<T>: Send` requires `T: Send`, because `AliasBox<T>: Send` allows you to drop `T` on the
+/// other thread, requiring `T: Send`. And it requires `T: Sync`, because
 /// `AliasBox<T>: Send` allows you to move the `AliasBox<T>` to another thread
-/// while keeping `AliasPtr<T>` on the original thread, requiring `T: Sync`.
-/// (While `AliasBox::alias()` is an `unsafe fn`,
-/// it's the purpose for `AliasBox` existing.)
+/// while keeping `AliasPtr<T>` on the original thread, allowing you to access `&T` on
+/// multiple threads. (While [`AliasBox::alias()`] is an `unsafe fn`,
+/// the only reason you'd ever create an `AliasBox` is to call it.)
 ///
-/// If these bounds are inappropriate for your data structure, you can `unsafe impl Send/Sync for`
-/// your type containing `AliasUnknown`.
+/// If these bounds are inappropriate for your data structure, you can
+/// `unsafe impl Send/Sync` for your type containing `AliasBox`.
 ///
 /// ## Implementation
 ///
@@ -90,7 +93,7 @@ impl<T: ?Sized> Drop for AliasBox<T> {
 }
 
 impl<T: ?Sized> AliasBox<T> {
-    /// Constructs an `AliasPtr` from a raw pointer.
+    /// Constructs an `AliasBox` from a raw pointer.
     ///
     /// # Safety
     ///
@@ -100,12 +103,23 @@ impl<T: ?Sized> AliasBox<T> {
         Self(NonNull::new_unchecked(p))
     }
 
-    /// Safety: The resulting AliasPtr and all clones are invalid
-    /// (safe but unsound to dereference) once the `AliasBox` is dropped.
+    // TODO should some of these functions be turned into type-level functions
+    // to avoid clashing with Deref?
+
+    /// Construct an [`AliasPtr`] pointing to the same data as `self`, allowing for
+    /// shared access to `T`.
+    ///
+    /// # Safety
+    ///
+    /// The returned `AliasPtr` and all clones are invalid
+    /// (safe but unsound to dereference) once `self: AliasBox` is dropped.
     pub unsafe fn alias(&self) -> AliasPtr<T> {
         AliasPtr::from_raw(self.0.as_ptr())
     }
 
+    /// Provides a raw pointer to the data.
+    ///
+    /// The pointer is valid until `this` is dropped, deallocating the data.
     pub fn as_ptr(this: &Self) -> *const T {
         this.0.as_ptr()
     }

@@ -6,7 +6,7 @@ use std::ptr::NonNull;
 /// The type `AliasPtr<T>` provides shared ownership of a value of type `T`,
 /// allocated in the heap. Invoking [`copy`][AliasPtr::copy] on `AliasPtr` produces
 /// a new `AliasPtr` instance, which points to the same allocation on the heap as the
-/// source `AliasPtr`. When you call `delete` on any of the copies,
+/// source `AliasPtr`. When you call [`delete`][AliasPtr::delete] on any of the copies,
 /// the value stored in that allocation is dropped,
 /// and all of the copies can no longer be safely dereferenced.
 ///
@@ -14,15 +14,15 @@ use std::ptr::NonNull;
 /// in order to avoid the runtime overhead of `Rc` or `Arc`
 /// in cases where the lifetimes are known statically.
 ///
-/// Shared references in Rust disallow mutation by default, and [`AliasPtr`]
+/// Shared references in Rust disallow mutation by default, and `AliasPtr`
 /// is no exception: you cannot generally obtain a mutable reference to
-/// something inside an [`AliasPtr`]. If you need mutability, put a `Cell`/`RefCell`
+/// something inside an `AliasPtr`. If you need mutability, put a `Cell`/`RefCell`
 /// (not thread-safe), `Mutex`/`RwLock`/`Atomic` (thread-safe), or `UnsafeCell`
 /// (unsafe API) inside the `AliasPtr`.
 ///
 /// ## Usage
 ///
-/// For each `T` on the heap, you are responsible for calling `delete()`
+/// For each `T` on the heap, you are responsible for calling [`delete()`][AliasPtr::delete]
 /// on exactly one `AliasPtr` pointing to it,
 /// and not dereferencing it or its aliases after.
 ///
@@ -36,7 +36,7 @@ use std::ptr::NonNull;
 /// ## Thread Safety
 ///
 /// Since `AliasPtr<T>` only exposes the same set of safe operations as a `&T`
-/// (`delete()` is unsafe),
+/// ([`delete()`][AliasPtr::delete()] is unsafe),
 /// it would technically be sound to expose the same `Send`/`Sync` bounds as `&T`:
 /// `impl Send/Sync for AliasPtr<T> where T: Sync`.
 ///
@@ -44,8 +44,8 @@ use std::ptr::NonNull;
 /// as a lint to guard against sending or cloning an `AliasPtr<T>` to another thread,
 /// then calling `delete()` there.
 ///
-/// If these bounds are inappropriate for your data structure, you can `unsafe impl Send/Sync for`
-/// your type containing `AliasPtr`.
+/// If these bounds are inappropriate for your data structure, you can
+/// `unsafe impl Send/Sync` for your type containing `AliasPtr`.
 ///
 /// ## Implementation
 ///
@@ -105,7 +105,7 @@ impl<T: ?Sized> AliasPtr<T> {
     ///
     /// `p` must be non-null and valid (its target is readable and writable).
     ///
-    /// In order for calling `delete()` to be sound,
+    /// In order for calling [`delete()`][AliasPtr::delete] to be sound,
     /// `p` must be obtained from `Box::into_raw()`.
     pub unsafe fn from_raw(p: *mut T) -> Self {
         Self(NonNull::new_unchecked(p))
@@ -115,7 +115,7 @@ impl<T: ?Sized> AliasPtr<T> {
     // to avoid clashing with Deref?
 
     /// Copy the pointer without copying the underlying data.
-    /// (This is equivalent to calling `clone()`.
+    /// (This is equivalent to calling [`clone()`][AliasPtr::clone].
     /// This type doesn't implement `Copy` to ensure all copies are explicit.)
     pub fn copy(&self) -> Self {
         self.clone()
@@ -139,7 +139,7 @@ impl<T: ?Sized> AliasPtr<T> {
 
     /// Provides a raw pointer to the data.
     ///
-    /// The pointer is valid until delete() is called on the `this` or any of its aliases.
+    /// The pointer is valid until [delete()][AliasPtr::delete] is called on the `this` or any of its aliases.
     pub fn as_ptr(this: &Self) -> *const T {
         this.0.as_ptr()
     }
