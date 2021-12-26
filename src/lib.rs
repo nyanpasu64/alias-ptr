@@ -21,8 +21,8 @@ use std::ptr::NonNull;
 /// Shared references in Rust disallow mutation by default, and [`AliasPtr`]
 /// is no exception: you cannot generally obtain a mutable reference to
 /// something inside an [`AliasPtr`]. If you need mutability, put a `Cell`/`RefCell`
-/// (not thread-safe), `Mutex`/`RwLock`/`Atomic` (thread-safe), or `UnsafeCell` (unsafe)
-/// inside the `AliasPtr`.
+/// (not thread-safe), `Mutex`/`RwLock`/`Atomic` (thread-safe), or `UnsafeCell`
+/// (unsafe API) inside the `AliasPtr`.
 ///
 /// ## Usage
 ///
