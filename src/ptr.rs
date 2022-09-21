@@ -134,7 +134,7 @@ impl<T: ?Sized> AliasPtr<T> {
     /// `Drop` only provides `&mut Parent`, which doesn't allow moving fields out.
     /// For discussion, see ["Re-use struct fields on drop"](https://internals.rust-lang.org/t/re-use-struct-fields-on-drop-was-drop-mut-self-vs-drop-self/8594).
     pub unsafe fn delete(&mut self) {
-        Box::from_raw(self.0.as_ptr());
+        drop(Box::from_raw(self.0.as_ptr()));
     }
 
     /// Provides a raw pointer to the data.

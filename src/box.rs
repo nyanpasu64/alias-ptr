@@ -87,7 +87,7 @@ impl<T: ?Sized> Drop for AliasBox<T> {
         // Safety: This allows creating dangling `AliasPtr`,
         // but it is unsafe to create an AliasPtr from an AliasBox.
         unsafe {
-            Box::from_raw(self.0.as_ptr());
+            drop(Box::from_raw(self.0.as_ptr()));
         }
     }
 }
