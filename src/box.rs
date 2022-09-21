@@ -123,8 +123,8 @@ impl<T: ?Sized> AliasBox<T> {
     ///
     /// If you call `unsafe { &mut *p.as_ptr() }`, you must not dereference any other
     /// aliases of `p` while the exclusive reference is active.
-    pub fn as_ptr(this: &Self) -> *mut T {
-        this.0.as_ptr()
+    pub fn as_ptr(&self) -> *mut T {
+        self.0.as_ptr()
     }
 }
 

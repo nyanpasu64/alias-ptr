@@ -144,8 +144,9 @@ impl<T: ?Sized> AliasPtr<T> {
     ///
     /// If you call `unsafe { &mut *p.as_ptr() }`, you must not dereference any other
     /// aliases of `p` while the exclusive reference is active.
-    pub fn as_ptr(this: &Self) -> *mut T {
-        this.0.as_ptr()
+    pub fn as_ptr(&self) -> *mut T {
+        // This clashes with (*self).as_ptr(). I don't care. This is just too convenient.
+        self.0.as_ptr()
     }
 }
 
@@ -169,22 +170,27 @@ mod tests {
     use std::cell::Cell;
     use std::mem::size_of;
 
-    struct AliasedPair(AliasPtr<Cell<i32>>, AliasPtr<Cell<i32>>);
+    struct AliasedPair<T>(AliasPtr<T>, AliasPtr<T>);
 
-    impl AliasedPair {
-        fn new(x: i32) -> AliasedPair {
-            let x = AliasPtr::new(Cell::new(x));
+    impl<T> AliasedPair<T> {
+        fn new(x: T) -> AliasedPair<T> {
+            let x = AliasPtr::new(x);
             AliasedPair(x.copy(), x)
         }
     }
 
-    impl Drop for AliasedPair {
+    impl<T> Drop for AliasedPair<T> {
         fn drop(&mut self) {
             unsafe {
                 self.0.delete();
             }
         }
     }
+
+    // technically you could omit these type aliases and rely on type inference on
+    // AliasedPair::new. maybe you shouldn't.
+    type CellPair = AliasedPair<Cell<i32>>;
+    type RawPair = AliasedPair<i32>;
 
     #[test]
     fn test_option_size_of() {
@@ -193,10 +199,30 @@ mod tests {
     }
 
     #[test]
-    fn test_aliased_pair() {
-        let pair = AliasedPair::new(1);
+    fn test_cell_pair() {
+        let pair = CellPair::new(Cell::new(1));
         pair.0.set(42);
         assert_eq!(pair.1.get(), 42);
+    }
+
+    #[test]
+    fn test_raw_pair() {
+        let pair = RawPair::new(1);
+        unsafe {
+            *pair.0.as_ptr() = 42;
+        }
+        assert_eq!(*pair.1, 42);
+    }
+
+    #[test]
+    fn test_raw_pair_mut_ref() {
+        let pair = RawPair::new(1);
+        unsafe {
+            let rmut = &mut *pair.0.as_ptr();
+            *rmut = 42;
+            // If you read/write *pair.1, then access *rmut again, it violates SB.
+        }
+        assert_eq!(*pair.1, 42);
     }
 
     // /// Does not compile, as expected.
