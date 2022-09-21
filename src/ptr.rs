@@ -139,8 +139,12 @@ impl<T: ?Sized> AliasPtr<T> {
 
     /// Provides a raw pointer to the data.
     ///
-    /// The pointer is valid until [delete()][AliasPtr::delete] is called on the `this` or any of its aliases.
-    pub fn as_ptr(this: &Self) -> *const T {
+    /// The pointer is valid until [delete()][AliasPtr::delete] is called on the `this`
+    /// or any of its aliases.
+    ///
+    /// If you call `unsafe { &mut *p.as_ptr() }`, you must not dereference any other
+    /// aliases of `p` while the exclusive reference is active.
+    pub fn as_ptr(this: &Self) -> *mut T {
         this.0.as_ptr()
     }
 }
