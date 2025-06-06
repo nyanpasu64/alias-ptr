@@ -2,6 +2,7 @@
 //! which allows safely creating multiple pointers to the same heap-allocated memory,
 //! and (unsafely) freeing the memory without reference counting overhead.
 
+use std::iter::FromIterator;
 use std::ops::Deref;
 use std::ptr::NonNull;
 
@@ -138,7 +139,7 @@ impl<T: ?Sized> AliasPtr<T> {
     /// `Drop` only provides `&mut Parent`, which doesn't allow moving fields out.
     /// For discussion, see ["Re-use struct fields on drop"](https://internals.rust-lang.org/t/re-use-struct-fields-on-drop-was-drop-mut-self-vs-drop-self/8594).
     pub unsafe fn delete(&mut self) {
-        Box::from_raw(self.0.as_ptr());
+        let _ = Box::from_raw(self.0.as_ptr());
     }
 
     /// Provides a raw pointer to the data.
@@ -162,6 +163,75 @@ impl<T: ?Sized> Deref for AliasPtr<T> {
 
 unsafe impl<T: ?Sized> Send for AliasPtr<T> where T: Send + Sync {}
 unsafe impl<T: ?Sized> Sync for AliasPtr<T> where T: Send + Sync {}
+
+
+impl<T: ?Sized + std::fmt::Debug> std::fmt::Debug for AliasPtr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AliasPtr({:?})", self.deref())
+    }
+}
+
+impl<T: ?Sized + std::fmt::Display> std::fmt::Display for AliasPtr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.deref())
+    }
+}
+
+impl<T: ?Sized + std::default::Default> std::default::Default for AliasPtr<T> {
+    fn default() -> Self {
+        AliasPtr::new(T::default())
+    }
+}
+
+impl<T: ?Sized + PartialEq> PartialEq for AliasPtr<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.deref() == other.deref()
+    }
+}
+impl<T: ?Sized + Eq> Eq for AliasPtr<T> {}
+
+impl<T: ?Sized + PartialOrd> PartialOrd for AliasPtr<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.deref().partial_cmp(other.deref())
+    }
+}
+
+impl<T: ?Sized + Ord> Ord for AliasPtr<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.deref().cmp(other.deref())
+    }
+}
+
+impl<T: ?Sized + std::hash::Hash> std::hash::Hash for AliasPtr<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.deref().hash(state);
+    }
+}
+
+impl<T> From<T> for AliasPtr<T> {
+    fn from(item: T) -> Self {
+        AliasPtr::new(item)
+    }
+}
+
+impl<T> From<Vec<T>> for AliasPtr<[T]> {
+    fn from(item: Vec<T>) -> Self {
+        item.into_boxed_slice().into()
+    }
+}
+
+impl<T, const N: usize> From<[T; N]> for AliasPtr<[T]> {
+    fn from(value: [T; N]) -> Self {
+        let a: Box<[T]> = Box::from(value);
+        a.into()
+    }
+}
+
+impl<A, B: ?Sized> FromIterator<A> for AliasPtr<B> where Box<B> : FromIterator<A> {
+    fn from_iter<I: IntoIterator<Item = A>>(iter: I) -> Self {
+        iter.into_iter().collect::<Box<B>>().into()
+    }
+}
 
 #[cfg(test)]
 mod tests {
